@@ -3,9 +3,22 @@ session_start();
 require '../config/database.php';
 
 
-$usersQuery = $connection->query("SELECT * FROM users ORDER BY created_at DESC");
+$limit = 5; 
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$offset = ($page - 1) * $limit;
+
+
+$usersQuery = $connection->prepare("SELECT * FROM users ORDER BY created_at DESC LIMIT :limit OFFSET :offset");
+$usersQuery->bindParam(':limit', $limit, PDO::PARAM_INT);
+$usersQuery->bindParam(':offset', $offset, PDO::PARAM_INT);
+$usersQuery->execute();
 $users = $usersQuery->fetchAll(PDO::FETCH_ASSOC);
 
+// Ümumi istifadəçi sayı
+$totalUsersQuery = $connection->query("SELECT COUNT(*) as total FROM users");
+$totalUsers = $totalUsersQuery->fetch(PDO::FETCH_ASSOC)['total'];
+
+$totalPages = ceil($totalUsers / $limit); // Ümumi səhifə sayı
 
 if (isset($_POST['change_status'])) {
     $user_id = $_POST['user_id'];
@@ -14,7 +27,7 @@ if (isset($_POST['change_status'])) {
     $updateStatusQuery = $connection->prepare("UPDATE users SET active = ? WHERE id = ?");
     $updateStatusQuery->execute([$status, $user_id]);
 
-    header("Location: manage_users.php");
+    header("Location: manage_users.php?page=" . $page);
     exit();
 }
 ?>
@@ -33,7 +46,6 @@ body {
     padding: 0;
     display: flex;
 }
-
 
 .sidebar {
     width: 250px;
@@ -97,7 +109,6 @@ body {
     margin-bottom: 20px;
 }
 
-
 table {
     width: 100%;
     border-collapse: collapse;
@@ -117,7 +128,6 @@ th, td {
 th {
     background-color: #f2f2f2;
 }
-
 
 .btn {
     padding: 5px 10px;
@@ -154,15 +164,57 @@ th {
     background-color: #c82333;
 }
 
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    list-style: none;
+    padding: 0;
+    margin-top: 20px;
+}
+
+.pagination li {
+    margin: 0 3px;
+}
+
+.pagination a {
+    display: block;
+    padding: 10px 15px;
+    text-decoration: none;
+    border: 1px solid #ddd;
+    color: #007bff;
+    border-radius: 5px;
+}
+
+.pagination a:hover {
+    background-color: #e1eff8;
+}
+
+.pagination .active a {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.pagination .disabled a {
+    color: #ddd;
+    pointer-events: none;
+    cursor: default;
+}
+
+.pagination .page-item span {
+    font-size: 16px;
+}
+
     </style>
 </head>
 <body>
     <div class="sidebar">
         <h2>Admin Panel</h2>
-        <a href="index.php">Dashboard</a>
+        <a href="index.php">Manage Categories</a>
         <a href="manage_users.php">Manage Users</a>
         <a href="manage_blogs.php">Manage Blogs</a>
-        <a href="admin_report.php">Admin Report</a>
+        <a href="admin_report.php">Statistics</a>
         <a href="../auth/logout.php">Logout</a>
     </div>
 
@@ -198,6 +250,25 @@ th {
                 <?php endforeach; ?>
             </tbody>
         </table>
+
+      
+        <ul class="pagination">
+            <li class="page-item <?php if ($page <= 1) { echo 'disabled'; } ?>">
+                <a class="page-link" href="<?php if ($page > 1) { echo "?page=" . ($page - 1); } else { echo "#"; } ?>">
+                    <span>&laquo;</span>
+                </a>
+            </li>
+            <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                <li class="page-item <?php if ($i == $page) { echo 'active'; } ?>">
+                    <a class="page-link" href="?page=<?php echo $i; ?>"><?php echo $i; ?></a>
+                </li>
+            <?php endfor; ?>
+            <li class="page-item <?php if ($page >= $totalPages) { echo 'disabled'; } ?>">
+                <a class="page-link" href="<?php if ($page < $totalPages) { echo "?page=" . ($page + 1); } else { echo "#"; } ?>">
+                    <span>&raquo;</span>
+                </a>
+            </li>
+        </ul>
     </div>
 </body>
 </html>

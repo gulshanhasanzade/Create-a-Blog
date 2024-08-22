@@ -2,11 +2,24 @@
 session_start();
 require '../config/database.php';
 
-// Blogların siyahısını əldə et (təsdiqlənməmiş bloglar)
-$blogsQuery = $connection->query("SELECT * FROM blogs WHERE is_publish = 0 ORDER BY created_at DESC");
+
+$limit = 3; // Hər səhifədə göstərəcəyiniz blog sayı
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$offset = ($page - 1) * $limit;
+
+// Blogları SQL sorğusu ilə gətiririk
+$blogsQuery = $connection->prepare("SELECT blogs.id, blogs.title, blogs.description, blogs.profile, blogs.is_publish, users.name AS author_name, users.surname AS author_surname FROM blogs JOIN users ON blogs.user_id = users.id WHERE blogs.is_publish = 0 ORDER BY blogs.created_at DESC LIMIT :limit OFFSET :offset");
+$blogsQuery->bindParam(':limit', $limit, PDO::PARAM_INT);
+$blogsQuery->bindParam(':offset', $offset, PDO::PARAM_INT);
+$blogsQuery->execute();
 $blogs = $blogsQuery->fetchAll(PDO::FETCH_ASSOC);
 
-// Blog statusunu dəyişdirmək (Təsdiqləmək)
+// Ümumi blog sayı
+$totalBlogsQuery = $connection->query("SELECT COUNT(*) as total FROM blogs WHERE is_publish = 0");
+$totalBlogs = $totalBlogsQuery->fetch(PDO::FETCH_ASSOC)['total'];
+
+$totalPages = ceil($totalBlogs / $limit); // Ümumi səhifə sayı
+
 if (isset($_POST['change_blog_status'])) {
     $blog_id = $_POST['blog_id'];
     $status = $_POST['status'];
@@ -14,18 +27,17 @@ if (isset($_POST['change_blog_status'])) {
     $updateBlogStatusQuery = $connection->prepare("UPDATE blogs SET is_publish = ? WHERE id = ?");
     $updateBlogStatusQuery->execute([$status, $blog_id]);
 
-    header("Location: manage_blogs.php");
+    header("Location: manage_blogs.php?page=" . $page);
     exit();
 }
 
-// Blogu silmək
 if (isset($_POST['delete_blog'])) {
     $blog_id = $_POST['blog_id'];
 
     $deleteBlogQuery = $connection->prepare("DELETE FROM blogs WHERE id = ?");
     $deleteBlogQuery->execute([$blog_id]);
 
-    header("Location: manage_blogs.php");
+    header("Location: manage_blogs.php?page=" . $page);
     exit();
 }
 ?>
@@ -37,14 +49,12 @@ if (isset($_POST['delete_blog'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manage Blogs</title>
     <style>
- 
 body {
     font-family: Arial, sans-serif;
     margin: 0;
     padding: 0;
     display: flex;
 }
-
 
 .sidebar {
     width: 250px;
@@ -71,7 +81,6 @@ body {
 .sidebar a:hover {
     background-color: #024872;
 }
-
 
 .main-content {
     margin-left: 250px;
@@ -107,7 +116,6 @@ body {
     margin-bottom: 20px;
 }
 
-
 table {
     width: 100%;
     border-collapse: collapse;
@@ -122,21 +130,21 @@ table, th, td {
 th, td {
     padding: 10px;
     text-align: left;
+    vertical-align: middle;
 }
 
 th {
     background-color: #f2f2f2;
 }
-.main-content h2{
+
+.main-content h2 {
     margin-left: 30px;
 }
-
 
 .btn-group {
     display: flex;
     gap: 4px; 
 }
-
 
 .btn {
     padding: 5px 10px;
@@ -173,15 +181,64 @@ th {
     background-color: #c82333;
 }
 
+.blog-image {
+    max-width: 150px;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}
+
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    list-style: none;
+    padding: 0;
+    margin-top: 20px;
+}
+
+.pagination li {
+    margin: 0 3px;
+}
+
+.pagination a {
+    display: block;
+    padding: 10px 15px;
+    text-decoration: none;
+    border: 1px solid #ddd;
+    color: #007bff;
+    border-radius: 5px;
+}
+
+.pagination a:hover {
+    background-color: #e1eff8;
+}
+
+.pagination .active a {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.pagination .disabled a {
+    color: #ddd;
+    pointer-events: none;
+    cursor: default;
+}
+
+.pagination .page-item span {
+    font-size: 16px;
+}
+
     </style>
 </head>
 <body>
     <div class="sidebar">
         <h2>Admin Panel</h2>
-        <a href="index.php">Dashboard</a>
+        <a href="index.php">Manage Categories</a>
         <a href="manage_users.php">Manage Users</a>
         <a href="manage_blogs.php">Manage Blogs</a>
-        <a href="admin_report.php">Admin Report</a>
+        <a href="admin_report.php">Statistics</a>
         <a href="../auth/logout.php">Logout</a>
     </div>
 
@@ -191,7 +248,9 @@ th {
             <thead>
                 <tr>
                     <th>ID</th>
+                    <th>Image</th>
                     <th>Title</th>
+                    <th>Description</th>
                     <th>Author</th>
                     <th>Status</th>
                     <th>Actions</th>
@@ -201,8 +260,10 @@ th {
                 <?php foreach ($blogs as $blog): ?>
                     <tr>
                         <td><?php echo $blog['id']; ?></td>
+                        <td><img src="<?php echo htmlspecialchars ('../uploads/blog_images/'.$blog['profile']);?>" alt="Blog Image" class="blog-image"></td>
                         <td><?php echo htmlspecialchars($blog['title']); ?></td>
-                        <td><?php echo htmlspecialchars($blog['user_id']); ?></td>
+                        <td><?php echo nl2br(htmlspecialchars($blog['description'])); ?></td>
+                        <td><?php echo htmlspecialchars($blog['author_name'] . ' ' . $blog['author_surname']); ?></td>
                         <td><?php echo $blog['is_publish'] ? 'Published' : 'Unpublished'; ?></td>
                         <td>
                             <div class="btn-group">
@@ -223,6 +284,25 @@ th {
                 <?php endforeach; ?>
             </tbody>
         </table>
+
+      
+        <ul class="pagination">
+            <li class="page-item <?php if ($page <= 1) { echo 'disabled'; } ?>">
+                <a class="page-link" href="<?php if ($page > 1) { echo "?page=" . ($page - 1); } else { echo "#"; } ?>">
+                    <span>&laquo;</span>
+                </a>
+            </li>
+            <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                <li class="page-item <?php if ($i == $page) { echo 'active'; } ?>">
+                    <a class="page-link" href="?page=<?php echo $i; ?>"><?php echo $i; ?></a>
+                </li>
+            <?php endfor; ?>
+            <li class="page-item <?php if ($page >= $totalPages) { echo 'disabled'; } ?>">
+                <a class="page-link" href="<?php if ($page < $totalPages) { echo "?page=" . ($page + 1); } else { echo "#"; } ?>">
+                    <span>&raquo;</span>
+                </a>
+            </li>
+        </ul>
     </div>
 </body>
 </html>

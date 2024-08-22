@@ -50,7 +50,7 @@ $blogsPerUser = $blogsPerUserQuery->fetchAll(PDO::FETCH_ASSOC);
         }
         .sidebar {
             width: 250px;
-            background-color: #00008B; /* Dark Blue */
+            background-color: #00008B; 
             color: white;
             padding: 15px;
             min-height: 100vh;
@@ -77,10 +77,10 @@ $blogsPerUser = $blogsPerUserQuery->fetchAll(PDO::FETCH_ASSOC);
     <div class="wrapper">
         <div class="sidebar">
             <h2>Admin Panel</h2>
-            <a href="index.php">Dashboard</a>
+            <a href="index.php">Manage Categories</a>
             <a href="manage_users.php">Manage Users</a>
             <a href="manage_blogs.php">Manage Blogs</a>
-            <a href="admin_report.php">Admin Report</a>
+            <a href="admin_report.php">Statistics</a>
             <a href="../auth/logout.php">Logout</a>
         </div>
 

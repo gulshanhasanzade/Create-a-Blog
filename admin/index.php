@@ -82,10 +82,10 @@ require '../config/database.php';
 <body>
     <div class="sidebar">
         <h2>Admin Panel</h2>
-        <a href="dashboard.php">Dashboard</a>
+        <a href="dashboard.php">Manage Categories</a>
         <a href="manage_users.php">Manage Users</a>
         <a href="manage_blogs.php">Manage Blogs</a>
-        <a href="admin_report.php">Admin Report</a>
+        <a href="admin_report.php">Statistics</a>
         <a href="../auth/logout.php">Logout</a>
     </div>
 

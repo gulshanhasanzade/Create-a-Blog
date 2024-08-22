@@ -3,6 +3,10 @@ session_start();
 require '../config/database.php';
 
 
+$limit = 5; // Hər səhifədə göstərəcəyiniz kateqoriya sayı
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$offset = ($page - 1) * $limit;
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
     $category_name = $_POST['category_name'] ?? null;
 
@@ -19,7 +23,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_category'])) {
         $error_message = "Category name is required.";
     }
 }
-
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['edit_category'])) {
     $category_id = $_POST['category_id'] ?? null;
@@ -39,7 +42,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['edit_category'])) {
     }
 }
 
-// Handle deleting a category
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['delete_category'])) {
     $category_id = $_POST['category_id'] ?? null;
 
@@ -57,9 +59,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['delete_category'])) {
     }
 }
 
-
-$categoriesQuery = $connection->query("SELECT * FROM categories ORDER BY name ASC");
+$categoriesQuery = $connection->prepare("SELECT * FROM categories ORDER BY name ASC LIMIT :limit OFFSET :offset");
+$categoriesQuery->bindParam(':limit', $limit, PDO::PARAM_INT);
+$categoriesQuery->bindParam(':offset', $offset, PDO::PARAM_INT);
+$categoriesQuery->execute();
 $categories = $categoriesQuery->fetchAll(PDO::FETCH_ASSOC);
+
+// Ümumi kateqoriya sayını öyrənirik
+$totalCategoriesQuery = $connection->query("SELECT COUNT(*) as total FROM categories");
+$totalCategories = $totalCategoriesQuery->fetch(PDO::FETCH_ASSOC)['total'];
+
+$totalPages = ceil($totalCategories / $limit); // Ümumi səhifə sayı
 ?>
 
 <!DOCTYPE html>
@@ -109,9 +119,7 @@ $categories = $categoriesQuery->fetchAll(PDO::FETCH_ASSOC);
             width: calc(100% - 250px);
         }
 
-        .main-content h2 {
-            margin-left: 30px;
-        }
+        
 
         .header {
             display: flex;
@@ -195,22 +203,62 @@ $categories = $categoriesQuery->fetchAll(PDO::FETCH_ASSOC);
         .btn-danger:hover {
             background-color: #c82333;
         }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            list-style: none;
+            padding: 0;
+            margin-top: 20px;
+        }
+
+        .pagination li {
+            margin: 0 3px;
+        }
+
+        .pagination a {
+            display: block;
+            padding: 10px 15px;
+            text-decoration: none;
+            border: 1px solid #ddd;
+            color: #007bff;
+            border-radius: 5px;
+        }
+
+        .pagination a:hover {
+            background-color: #e1eff8;
+        }
+
+        .pagination .active a {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+
+        .pagination .disabled a {
+            color: #ddd;
+            pointer-events: none;
+            cursor: default;
+        }
+
+        .pagination .page-item span {
+            font-size: 16px;
+        }
     </style>
 </head>
 <body>
     <div class="sidebar">
         <h2>Admin Panel</h2>
-        <a href="index.php">Dashboard</a>
+        <a href="index.php">Manage Categories</a>
         <a href="manage_users.php">Manage Users</a>
         <a href="manage_blogs.php">Manage Blogs</a>
-        <a href="admin_dashboard.php">Manage Categories</a>
+        <a href="admin_dashboard.php">Statistics</a>
         <a href="../auth/logout.php">Logout</a>
     </div>
 
     <div class="main-content">
-        <h2>Manage Categories</h2>
+        <h2>Categories</h2>
 
-       
         <?php if (isset($success_message)): ?>
             <div class="alert alert-success"><?php echo $success_message; ?></div>
         <?php endif; ?>
@@ -218,7 +266,6 @@ $categories = $categoriesQuery->fetchAll(PDO::FETCH_ASSOC);
             <div class="alert alert-danger"><?php echo $error_message; ?></div>
         <?php endif; ?>
 
-        
         <form action="" method="POST" class="mb-5">
             <div class="mb-3">
                 <label for="category_name" class="form-label">Category Name</label>
@@ -227,7 +274,6 @@ $categories = $categoriesQuery->fetchAll(PDO::FETCH_ASSOC);
             <button type="submit" name="add_category" class="btn btn-primary">Add Category</button>
         </form>
 
-      
         <h3>Existing Categories</h3>
         <table class="table">
             <thead>
@@ -241,13 +287,11 @@ $categories = $categoriesQuery->fetchAll(PDO::FETCH_ASSOC);
                     <tr>
                         <td><?php echo htmlspecialchars($category['name']); ?></td>
                         <td>
-                            <!-- Edit Category Form -->
                             <form action="" method="POST" class="d-inline">
                                 <input type="hidden" name="category_id" value="<?php echo $category['id']; ?>">
                                 <input type="text" name="new_category_name" class="form-control d-inline-block w-50" value="<?php echo htmlspecialchars($category['name']); ?>" required>
                                 <button type="submit" name="edit_category" class="btn btn-warning">Edit</button>
                             </form>
-                            <!-- Delete Category Form -->
                             <form action="" method="POST" class="d-inline">
                                 <input type="hidden" name="category_id" value="<?php echo $category['id']; ?>">
                                 <button type="submit" name="delete_category" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this category?');">Delete</button>
@@ -257,6 +301,25 @@ $categories = $categoriesQuery->fetchAll(PDO::FETCH_ASSOC);
                 <?php endforeach; ?>
             </tbody>
         </table>
+
+        <!-- Səhifələmə -->
+        <ul class="pagination">
+            <li class="page-item <?php if ($page <= 1) { echo 'disabled'; } ?>">
+                <a class="page-link" href="<?php if ($page > 1) { echo "?page=" . ($page - 1); } else { echo "#"; } ?>">
+                    <span>&laquo;</span>
+                </a>
+            </li>
+            <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                <li class="page-item <?php if ($i == $page) { echo 'active'; } ?>">
+                    <a class="page-link" href="?page=<?php echo $i; ?>"><?php echo $i; ?></a>
+                </li>
+            <?php endfor; ?>
+            <li class="page-item <?php if ($page >= $totalPages) { echo 'disabled'; } ?>">
+                <a class="page-link" href="<?php if ($page < $totalPages) { echo "?page=" . ($page + 1); } else { echo "#"; } ?>">
+                    <span>&raquo;</span>
+                </a>
+            </li>
+        </ul>
     </div>
 </body>
 </html>
